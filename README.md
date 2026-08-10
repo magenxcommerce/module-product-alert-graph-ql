@@ -1,0 +1,73 @@
+# Magenx_ProductAlertGraphQl
+
+GraphQL coverage for the stock `Magento_ProductAlert` module. It lets a
+logged-in customer subscribe to **price-drop** and **back-in-stock** alerts and
+read/manage their subscriptions — the same data the storefront controllers
+(`productalert/add/price`, `productalert/add/stock`, `productalert/unsubscribe/*`)
+write, exposed over GraphQL so a headless storefront can use it.
+
+This is a companion module (like `CatalogGraphQl` beside `Catalog`); the core
+`Magento_ProductAlert` module is left untouched.
+
+## Schema
+
+### Mutations
+
+```graphql
+productAlertSubscribe(input: { product_sku: String!, alert_type: PRICE|STOCK }): ProductAlertSubscriptionOutput
+productAlertUnsubscribe(input: { product_sku: String!, alert_type: PRICE|STOCK }): ProductAlertSubscriptionOutput
+```
+
+Both require an authenticated customer (`Authorization: Bearer <customer token>`)
+and operate on the current store/website (from the `Store` request header).
+`productAlertSubscribe` throws if the alert type is disabled in
+**Stores → Configuration → Catalog → Catalog → Product Alerts**. The output's
+`product_alerts` field returns the customer's full, updated subscription list.
+
+### Query
+
+```graphql
+customer {
+  product_alerts {
+    price_alerts { id alert_type price add_date product { ...ProductInterface } }
+    stock_alerts { id alert_type add_date product { ...ProductInterface } }
+  }
+}
+```
+
+The `product` field resolves a full `ProductInterface`, so the storefront can
+render product cards directly from the subscription list.
+
+### Product & StoreConfig fields
+
+```graphql
+interface ProductInterface {
+  is_price_alert_subscribed: Boolean   # null for guests
+  is_stock_alert_subscribed: Boolean   # null for guests
+}
+
+type StoreConfig {
+  product_alert_allow_price: Boolean   # catalog/productalert/allow_price
+  product_alert_allow_stock: Boolean   # catalog/productalert/allow_stock
+}
+```
+
+`is_*_alert_subscribed` let the product page show the current subscription state
+without an extra query; the `StoreConfig` flags let the storefront hide a
+subscribe button when the merchant has disabled that alert type.
+
+## Install
+
+Place the module under `app/code/Magento/ProductAlertGraphQl` (or install via
+Composer), then:
+
+```bash
+bin/magento module:enable Magenx_ProductAlertGraphQl
+bin/magento setup:upgrade
+bin/magento setup:di:compile      # production mode
+bin/magento cache:flush
+```
+
+No DB schema changes — it reuses the existing `product_alert_price` /
+`product_alert_stock` tables. Emails are still sent by the stock
+`Magento_ProductAlert` cron (`bin/magento cron:run`), unchanged.

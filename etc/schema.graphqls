@@ -1,0 +1,66 @@
+# Copyright © Magenx. All rights reserved.
+
+type Mutation {
+    productAlertSubscribe(
+        input: ProductAlertSubscriptionInput! @doc(description: "The product and alert type to subscribe to.")
+    ): ProductAlertSubscriptionOutput
+        @resolver(class: "Magenx\\ProductAlertGraphQl\\Model\\Resolver\\Subscribe")
+        @doc(description: "Subscribe the logged-in customer to a price-drop or back-in-stock alert for a product.")
+
+    productAlertUnsubscribe(
+        input: ProductAlertSubscriptionInput! @doc(description: "The product and alert type to unsubscribe from.")
+    ): ProductAlertSubscriptionOutput
+        @resolver(class: "Magenx\\ProductAlertGraphQl\\Model\\Resolver\\Unsubscribe")
+        @doc(description: "Remove a price-drop or back-in-stock alert subscription for the logged-in customer.")
+}
+
+input ProductAlertSubscriptionInput @doc(description: "Identifies the product and the kind of alert.") {
+    product_sku: String! @doc(description: "The SKU of the product the alert is for.")
+    alert_type: ProductAlertType! @doc(description: "Whether the alert is for price drops or back-in-stock notifications.")
+}
+
+enum ProductAlertType @doc(description: "The kind of product alert.") {
+    PRICE
+    STOCK
+}
+
+type ProductAlertSubscriptionOutput @doc(description: "Contains the customer's product alert subscriptions after a change.") {
+    product_alerts: ProductAlerts!
+        @resolver(class: "Magenx\\ProductAlertGraphQl\\Model\\Resolver\\CustomerProductAlerts")
+        @doc(description: "The logged-in customer's product alert subscriptions after the change.")
+}
+
+type Customer {
+    product_alerts: ProductAlerts
+        @resolver(class: "Magenx\\ProductAlertGraphQl\\Model\\Resolver\\CustomerProductAlerts")
+        @doc(description: "The logged-in customer's price and stock product alert subscriptions.")
+}
+
+type ProductAlerts @doc(description: "A customer's price-drop and back-in-stock product alert subscriptions.") {
+    price_alerts: [ProductAlertEntry!]! @doc(description: "Active price-drop alert subscriptions.")
+    stock_alerts: [ProductAlertEntry!]! @doc(description: "Active back-in-stock alert subscriptions.")
+}
+
+type ProductAlertEntry @doc(description: "A single product alert subscription.") {
+    id: Int! @doc(description: "The unique ID of the alert subscription.")
+    alert_type: ProductAlertType! @doc(description: "Whether this is a price-drop or back-in-stock alert.")
+    product: ProductInterface
+        @resolver(class: "Magenx\\ProductAlertGraphQl\\Model\\Resolver\\ProductAlertProduct")
+        @doc(description: "The product the alert is for. Null if the product is no longer available.")
+    price: Float @doc(description: "For price alerts, the product price recorded when the subscription was created.")
+    add_date: String! @doc(description: "The date the subscription was created.")
+}
+
+interface ProductInterface {
+    is_price_alert_subscribed: Boolean
+        @resolver(class: "Magenx\\ProductAlertGraphQl\\Model\\Resolver\\Product\\IsPriceAlertSubscribed")
+        @doc(description: "Whether the logged-in customer is subscribed to a price-drop alert for this product. Null for guests.")
+    is_stock_alert_subscribed: Boolean
+        @resolver(class: "Magenx\\ProductAlertGraphQl\\Model\\Resolver\\Product\\IsStockAlertSubscribed")
+        @doc(description: "Whether the logged-in customer is subscribed to a back-in-stock alert for this product. Null for guests.")
+}
+
+type StoreConfig {
+    product_alert_allow_price: Boolean @doc(description: "Whether price-drop alerts are enabled for the store (Catalog > Product Alerts).")
+    product_alert_allow_stock: Boolean @doc(description: "Whether back-in-stock alerts are enabled for the store (Catalog > Product Alerts).")
+}

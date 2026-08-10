@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Copyright © Magenx. All rights reserved.
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+    <!-- Expose the Product Alert "allow price / allow stock" admin flags on the
+         storeConfig GraphQL query so the storefront can hide the subscribe
+         buttons when a merchant has disabled an alert type. -->
+    <type name="Magento\StoreGraphQl\Model\Resolver\Store\StoreConfigDataProvider">
+        <arguments>
+            <argument name="extendedConfigData" xsi:type="array">
+                <item name="product_alert_allow_price" xsi:type="string">catalog/productalert/allow_price</item>
+                <item name="product_alert_allow_stock" xsi:type="string">catalog/productalert/allow_stock</item>
+            </argument>
+        </arguments>
+    </type>
+</config>

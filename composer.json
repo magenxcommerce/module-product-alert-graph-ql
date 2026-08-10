@@ -1,0 +1,31 @@
+{
+    "name": "magenx/module-product-alert-graph-ql",
+    "description": "GraphQL coverage for the Magento_ProductAlert module: price/stock alert subscriptions for logged-in customers.",
+    "config": {
+        "sort-packages": true
+    },
+    "require": {
+        "php": "~8.3.0||~8.4.0||~8.5.0",
+        "magento/framework": "*",
+        "magento/module-catalog": "*",
+        "magento/module-catalog-graph-ql": "*",
+        "magento/module-customer": "*",
+        "magento/module-customer-graph-ql": "*",
+        "magento/module-product-alert": "*",
+        "magento/module-store": "*",
+        "magento/module-store-graph-ql": "*"
+    },
+    "type": "magento2-module",
+    "license": [
+        "OSL-3.0",
+        "AFL-3.0"
+    ],
+    "autoload": {
+        "files": [
+            "registration.php"
+        ],
+        "psr-4": {
+            "Magenx\\ProductAlertGraphQl\\": ""
+        }
+    }
+}
