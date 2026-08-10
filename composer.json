@@ -1,5 +1,5 @@
 {
-    "name": "magenx/module-product-alert-graph-ql",
+    "name": "magenxcommerce/module-product-alert-graph-ql",
     "description": "GraphQL coverage for the Magento_ProductAlert module: price/stock alert subscriptions for logged-in customers.",
     "config": {
         "sort-packages": true
