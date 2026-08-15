@@ -32,14 +32,21 @@ and operate on the current store/website (from the `Store` request header).
 ```graphql
 customer {
   product_alerts {
-    price_alerts { id alert_type price add_date product { ...ProductInterface } }
-    stock_alerts { id alert_type add_date product { ...ProductInterface } }
+    price_alerts { id alert_type price current_price price_diff add_date status status_changed_at product { ...ProductInterface } }
+    stock_alerts { id alert_type add_date status status_changed_at product { ...ProductInterface } }
   }
 }
 ```
 
 The `product` field resolves a full `ProductInterface`, so the storefront can
 render product cards directly from the subscription list.
+
+`status` is `ACTIVE` until the `Magento_ProductAlert` cron sends the
+notification, then flips to `SENT`; `status_changed_at` is the date that
+happened (`last_send_date` / `send_date`), null while still `ACTIVE`. On
+price alerts, `price` is the price recorded when the customer subscribed,
+`current_price` is the product's live price, and `price_diff` is
+`price - current_price` (positive once the price has dropped).
 
 ### Product & StoreConfig fields
 
