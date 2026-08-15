@@ -48,7 +48,16 @@ type ProductAlertEntry @doc(description: "A single product alert subscription.")
         @resolver(class: "Magenx\\ProductAlertGraphQl\\Model\\Resolver\\ProductAlertProduct")
         @doc(description: "The product the alert is for. Null if the product is no longer available.")
     price: Float @doc(description: "For price alerts, the product price recorded when the subscription was created.")
+    current_price: Float @doc(description: "For price alerts, the product's current price. Null for stock alerts or if the product is no longer available.")
+    price_diff: Float @doc(description: "For price alerts, the recorded price minus the current price. Positive when the price has dropped since subscribing. Null for stock alerts or if the product is no longer available.")
     add_date: String! @doc(description: "The date the subscription was created.")
+    status: ProductAlertStatus! @doc(description: "Whether the alert notification has already been sent to the customer.")
+    status_changed_at: String @doc(description: "The date the alert notification was last sent, i.e. when the status changed to SENT. Null while the alert is still ACTIVE.")
+}
+
+enum ProductAlertStatus @doc(description: "The state of a product alert subscription.") {
+    ACTIVE
+    SENT
 }
 
 interface ProductInterface {

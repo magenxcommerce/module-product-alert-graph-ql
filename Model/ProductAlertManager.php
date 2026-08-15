@@ -193,17 +193,58 @@ class ProductAlertManager
 
         $entries = [];
         foreach ($collection as $alert) {
+            $productId = (int) $alert->getProductId();
+            $storeId = (int) $alert->getStoreId();
+            $isPriceAlert = $alertType === self::ALERT_TYPE_PRICE;
+            $currentPrice = $isPriceAlert ? $this->getCurrentPrice($productId, $storeId) : null;
+            $recordedPrice = $isPriceAlert ? (float) $alert->getPrice() : null;
+
             $entries[] = [
                 'id' => (int) $alert->getId(),
                 'alert_type' => $alertType,
-                'product_id' => (int) $alert->getProductId(),
-                'store_id' => (int) $alert->getStoreId(),
-                'price' => $alertType === self::ALERT_TYPE_PRICE ? (float) $alert->getPrice() : null,
+                'product_id' => $productId,
+                'store_id' => $storeId,
+                'price' => $recordedPrice,
+                'current_price' => $currentPrice,
+                'price_diff' => $currentPrice !== null ? $recordedPrice - $currentPrice : null,
                 'add_date' => (string) $alert->getAddDate(),
+                'status' => (int) $alert->getStatus() === 1 ? 'SENT' : 'ACTIVE',
+                'status_changed_at' => $this->normalizeDate(
+                    (string) ($isPriceAlert ? $alert->getLastSendDate() : $alert->getSendDate())
+                ),
             ];
         }
 
         return $entries;
+    }
+
+    /**
+     * Current final price of a product, or null if it can no longer be loaded.
+     *
+     * @param int $productId
+     * @param int $storeId
+     * @return float|null
+     */
+    private function getCurrentPrice(int $productId, int $storeId): ?float
+    {
+        try {
+            $product = $this->productRepository->getById($productId, false, $storeId);
+        } catch (NoSuchEntityException $e) {
+            return null;
+        }
+
+        return (float) $product->getFinalPrice();
+    }
+
+    /**
+     * Normalize a possibly empty/zero timestamp into a nullable date string.
+     *
+     * @param string $date
+     * @return string|null
+     */
+    private function normalizeDate(string $date): ?string
+    {
+        return $date === '' || $date === '0000-00-00 00:00:00' ? null : $date;
     }
 
     /**
