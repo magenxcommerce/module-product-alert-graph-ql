@@ -24,10 +24,26 @@ productAlertUnsubscribe(input: { product_sku: String!, alert_type: PRICE|STOCK }
 Both require an authenticated customer (`Authorization: Bearer <customer token>`)
 and operate on the current store/website (from the `Store` request header).
 `productAlertSubscribe` throws if the alert type is disabled in
-**Stores → Configuration → Catalog → Catalog → Product Alerts**. The output's
-`product_alerts` field returns the customer's full, updated subscription list.
+**Stores → Configuration → Catalog → Catalog → Product Alerts**. Subscribing
+is idempotent; unsubscribing removes the alert in the current website and is a
+no-op when there is none.
 
-### Query
+The output carries `product_sku`, `alert_type` and `is_subscribed` (the new
+state, no extra query). Its `product_alerts` field returns the customer's full,
+updated subscription list, but it loads every subscribed product, so select it
+only when the whole list is needed (not for a product page toggle).
+
+### Queries
+
+```graphql
+productAlertStatus(product_sku: String!): ProductAlertStatusOutput
+# { product_sku, is_price_alert_subscribed: Boolean!, is_stock_alert_subscribed: Boolean! }
+```
+
+Per-product subscription state for the product page buttons. Customer token
+required. One SKU lookup and one query over both alert tables, no catalog
+search or product load. An unknown SKU, or one not sold on the current website,
+reads as not subscribed.
 
 ```graphql
 customer {
@@ -39,7 +55,8 @@ customer {
 ```
 
 The `product` field resolves a full `ProductInterface`, so the storefront can
-render product cards directly from the subscription list.
+render product cards directly from the subscription list. Products are loaded
+in one collection per store for the whole list, not one by one.
 
 `status` is `ACTIVE` until the `Magento_ProductAlert` cron sends the
 notification, then flips to `SENT`; `status_changed_at` is the date that
@@ -48,23 +65,21 @@ price alerts, `price` is the price recorded when the customer subscribed,
 `current_price` is the product's live price, and `price_diff` is
 `price - current_price` (positive once the price has dropped).
 
-### Product & StoreConfig fields
+### StoreConfig fields
 
 ```graphql
-interface ProductInterface {
-  is_price_alert_subscribed: Boolean   # null for guests
-  is_stock_alert_subscribed: Boolean   # null for guests
-}
-
 type StoreConfig {
   product_alert_allow_price: Boolean   # catalog/productalert/allow_price
   product_alert_allow_stock: Boolean   # catalog/productalert/allow_stock
 }
 ```
 
-`is_*_alert_subscribed` let the product page show the current subscription state
-without an extra query; the `StoreConfig` flags let the storefront hide a
-subscribe button when the merchant has disabled that alert type.
+The `StoreConfig` flags let the storefront hide a subscribe button when the
+merchant has disabled that alert type.
+
+`ProductInterface.is_price_alert_subscribed` / `is_stock_alert_subscribed` were
+removed in 2.0.0: they ran through the `products` search and became a per-item
+query fan-out on any listing. Use `productAlertStatus` instead.
 
 ## Install
 

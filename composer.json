@@ -11,6 +11,7 @@
         "magento/module-catalog-graph-ql": "*",
         "magento/module-customer": "*",
         "magento/module-customer-graph-ql": "*",
+        "magento/module-graph-ql": "*",
         "magento/module-product-alert": "*",
         "magento/module-store": "*",
         "magento/module-store-graph-ql": "*"

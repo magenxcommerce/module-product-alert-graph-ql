@@ -1,5 +1,19 @@
 # Copyright © Magenx. All rights reserved.
 
+type Query {
+    productAlertStatus(
+        product_sku: String! @doc(description: "The SKU of the product to check.")
+    ): ProductAlertStatusOutput
+        @resolver(class: "Magenx\\ProductAlertGraphQl\\Model\\Resolver\\ProductAlertStatus")
+        @doc(description: "Whether the logged-in customer is subscribed to price-drop and back-in-stock alerts for a product. Customer token required.")
+}
+
+type ProductAlertStatusOutput @doc(description: "The logged-in customer's alert subscriptions for one product.") {
+    product_sku: String! @doc(description: "The SKU that was checked.")
+    is_price_alert_subscribed: Boolean! @doc(description: "Whether the customer is subscribed to a price-drop alert for the product in the current website.")
+    is_stock_alert_subscribed: Boolean! @doc(description: "Whether the customer is subscribed to a back-in-stock alert for the product in the current website.")
+}
+
 type Mutation {
     productAlertSubscribe(
         input: ProductAlertSubscriptionInput! @doc(description: "The product and alert type to subscribe to.")
@@ -24,10 +38,13 @@ enum ProductAlertType @doc(description: "The kind of product alert.") {
     STOCK
 }
 
-type ProductAlertSubscriptionOutput @doc(description: "Contains the customer's product alert subscriptions after a change.") {
+type ProductAlertSubscriptionOutput @doc(description: "The result of a product alert subscription change.") {
+    product_sku: String! @doc(description: "The SKU of the product the change applied to.")
+    alert_type: ProductAlertType! @doc(description: "The kind of alert that was changed.")
+    is_subscribed: Boolean! @doc(description: "Whether the customer is now subscribed to this alert. Cheap; prefer it over product_alerts when only this product's state is needed.")
     product_alerts: ProductAlerts!
         @resolver(class: "Magenx\\ProductAlertGraphQl\\Model\\Resolver\\CustomerProductAlerts")
-        @doc(description: "The logged-in customer's product alert subscriptions after the change.")
+        @doc(description: "The logged-in customer's full product alert subscription list after the change. Loads every subscribed product, so only select it when the whole list is needed.")
 }
 
 type Customer {
@@ -58,15 +75,6 @@ type ProductAlertEntry @doc(description: "A single product alert subscription.")
 enum ProductAlertStatus @doc(description: "The state of a product alert subscription.") {
     ACTIVE
     SENT
-}
-
-interface ProductInterface {
-    is_price_alert_subscribed: Boolean
-        @resolver(class: "Magenx\\ProductAlertGraphQl\\Model\\Resolver\\Product\\IsPriceAlertSubscribed")
-        @doc(description: "Whether the logged-in customer is subscribed to a price-drop alert for this product. Null for guests.")
-    is_stock_alert_subscribed: Boolean
-        @resolver(class: "Magenx\\ProductAlertGraphQl\\Model\\Resolver\\Product\\IsStockAlertSubscribed")
-        @doc(description: "Whether the logged-in customer is subscribed to a back-in-stock alert for this product. Null for guests.")
 }
 
 type StoreConfig {

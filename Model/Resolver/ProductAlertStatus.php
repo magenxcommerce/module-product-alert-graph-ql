@@ -12,9 +12,12 @@ use Magento\Framework\GraphQl\Schema\Type\ResolveInfo;
 use Magenx\ProductAlertGraphQl\Model\ProductAlertManager;
 
 /**
- * Resolver for the `productAlertSubscribe` mutation.
+ * Resolver for the `productAlertStatus` query.
+ *
+ * Drives the product page subscribe buttons with two small SQL queries instead
+ * of a `products` search.
  */
-class Subscribe implements ResolverInterface
+class ProductAlertStatus implements ResolverInterface
 {
     /**
      * @param ProductAlertManager $manager
@@ -32,18 +35,14 @@ class Subscribe implements ResolverInterface
     public function resolve(Field $field, $context, ResolveInfo $info, ?array $value = null, ?array $args = null)
     {
         $customerId = $this->requestReader->getCustomerId($context);
-        $sku = $this->requestReader->getSku($args['input'] ?? null);
-        // ProductAlertType is a schema enum, so GraphQL has already rejected anything else.
-        $alertType = (string) $args['input']['alert_type'];
+        $sku = $this->requestReader->getSku($args);
 
-        $this->manager->subscribe($customerId, $sku, $alertType, $context->getExtensionAttributes()->getStore());
+        $status = $this->manager->getStatus($customerId, $sku, $context->getExtensionAttributes()->getStore());
 
-        // `product_alerts` (the full list) is resolved by CustomerProductAlerts
-        // off the request context, and only when the client selects it.
         return [
             'product_sku' => $sku,
-            'alert_type' => $alertType,
-            'is_subscribed' => true,
+            'is_price_alert_subscribed' => $status[ProductAlertManager::ALERT_TYPE_PRICE],
+            'is_stock_alert_subscribed' => $status[ProductAlertManager::ALERT_TYPE_STOCK],
         ];
     }
 }
