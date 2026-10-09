@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/magenxcommerce/module-product-alert-graph-ql/compare/v1.1.0...v2.0.0) (2026-10-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* `ProductInterface.is_price_alert_subscribed` and `is_stock_alert_subscribed` are removed. Use `productAlertStatus`.
+
+### Bug Fixes
+
+* Optimize product alert queries with direct database access ([#8](https://github.com/magenxcommerce/module-product-alert-graph-ql/issues/8)) ([8641d0f](https://github.com/magenxcommerce/module-product-alert-graph-ql/commit/8641d0ffe5149e10d96409398f7f43ea06150e17))
+
 ## [1.1.0](https://github.com/magenxcommerce/module-product-alert-graph-ql/compare/v1.0.0...v1.1.0) (2026-08-15)
 
 
