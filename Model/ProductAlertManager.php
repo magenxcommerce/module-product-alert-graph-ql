@@ -10,9 +10,6 @@ use Magento\Catalog\Api\Data\ProductInterface;
 use Magento\Catalog\Api\ProductRepositoryInterface;
 use Magento\Catalog\Model\ResourceModel\Product\CollectionFactory as ProductCollectionFactory;
 use Magento\Framework\App\Config\ScopeConfigInterface;
-use Magento\Framework\App\ResourceConnection;
-use Magento\Framework\DB\Select;
-use Magento\Framework\DB\Sql\Expression;
 use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Framework\GraphQl\Exception\GraphQlInputException;
 use Magento\Framework\GraphQl\Exception\GraphQlNoSuchEntityException;
@@ -23,22 +20,21 @@ use Magento\ProductAlert\Model\ResourceModel\Stock\CollectionFactory as StockCol
 use Magento\ProductAlert\Model\StockFactory;
 use Magento\Store\Api\Data\StoreInterface;
 use Magento\Store\Model\ScopeInterface;
+use Magenx\ProductAlertGraphQl\Model\ResourceModel\Alert as AlertResource;
 
 /**
  * Subscribe, unsubscribe and read Product Alert subscriptions for a customer.
  *
  * Wraps the legacy Magento_ProductAlert price/stock tables. The hot paths (the
  * product page status lookup and the subscribe/unsubscribe toggles) resolve the
- * SKU with a single indexed query and never load the full EAV product, except
- * for a price subscription, which has to record the product's final price.
+ * SKU with a single indexed query (ResourceModel\Alert) and never load the
+ * full EAV product, except for a price subscription, which has to record the
+ * product's final price. Writes go through the core alert models.
  */
 class ProductAlertManager
 {
     public const ALERT_TYPE_PRICE = 'PRICE';
     public const ALERT_TYPE_STOCK = 'STOCK';
-
-    private const TABLE_PRICE = 'product_alert_price';
-    private const TABLE_STOCK = 'product_alert_stock';
 
     /**
      * @param ProductRepositoryInterface $productRepository
@@ -48,7 +44,7 @@ class ProductAlertManager
      * @param PriceCollectionFactory $priceCollectionFactory
      * @param StockCollectionFactory $stockCollectionFactory
      * @param ScopeConfigInterface $scopeConfig
-     * @param ResourceConnection $resourceConnection
+     * @param AlertResource $alertResource
      */
     public function __construct(
         private readonly ProductRepositoryInterface $productRepository,
@@ -58,7 +54,7 @@ class ProductAlertManager
         private readonly PriceCollectionFactory $priceCollectionFactory,
         private readonly StockCollectionFactory $stockCollectionFactory,
         private readonly ScopeConfigInterface $scopeConfig,
-        private readonly ResourceConnection $resourceConnection
+        private readonly AlertResource $alertResource
     ) {
     }
 
@@ -79,7 +75,7 @@ class ProductAlertManager
     public function subscribe(int $customerId, string $sku, string $alertType, StoreInterface $store): void
     {
         $this->assertAllowed($alertType, $store);
-        $productId = $this->getProductId($sku, (int) $store->getWebsiteId());
+        $productId = $this->alertResource->getProductIdBySku($sku, (int) $store->getWebsiteId());
         if ($productId === null) {
             throw $this->productNotFound();
         }
@@ -110,8 +106,9 @@ class ProductAlertManager
      * Remove a customer's price or stock alert subscription for the given SKU.
      *
      * Deletes every row for the product in the current website (the same scope
-     * the subscription list and status lookup read), in a single statement.
-     * Removing an alert that doesn't exist is a no-op.
+     * the subscription list and status lookup read). Rows are deleted through
+     * the core alert models so `*_delete_before/after` events and resource
+     * model plugins fire. Removing an alert that doesn't exist is a no-op.
      *
      * @param int $customerId
      * @param string $sku
@@ -124,21 +121,22 @@ class ProductAlertManager
     {
         // Not restricted to products still assigned to the website: an alert
         // for a product removed from the catalog must stay removable.
-        $productId = $this->getProductId($sku);
+        $productId = $this->alertResource->getProductIdBySku($sku);
         if ($productId === null) {
             return;
         }
 
-        $connection = $this->resourceConnection->getConnection();
+        $collection = $alertType === self::ALERT_TYPE_PRICE
+            ? $this->priceCollectionFactory->create()
+            : $this->stockCollectionFactory->create();
+        $collection->addFieldToFilter('customer_id', $customerId)
+            ->addFieldToFilter('product_id', $productId)
+            ->addFieldToFilter('website_id', (int) $store->getWebsiteId());
+
         try {
-            $connection->delete(
-                $this->resourceConnection->getTableName($this->getTable($alertType)),
-                [
-                    'customer_id = ?' => $customerId,
-                    'product_id = ?' => $productId,
-                    'website_id = ?' => (int) $store->getWebsiteId(),
-                ]
-            );
+            foreach ($collection as $alert) {
+                $alert->delete();
+            }
         } catch (\Exception $e) {
             throw new GraphQlInputException(
                 __("The alert subscription couldn't be removed. Please try again later."),
@@ -163,26 +161,12 @@ class ProductAlertManager
         $status = [self::ALERT_TYPE_PRICE => false, self::ALERT_TYPE_STOCK => false];
 
         $websiteId = (int) $store->getWebsiteId();
-        $productId = $this->getProductId($sku, $websiteId);
+        $productId = $this->alertResource->getProductIdBySku($sku, $websiteId);
         if ($productId === null) {
             return $status;
         }
 
-        $connection = $this->resourceConnection->getConnection();
-        $selects = [];
-        foreach ([self::ALERT_TYPE_PRICE, self::ALERT_TYPE_STOCK] as $alertType) {
-            $selects[] = $connection->select()
-                ->from(
-                    $this->resourceConnection->getTableName($this->getTable($alertType)),
-                    ['alert_type' => new Expression($connection->quote($alertType))]
-                )
-                ->where('customer_id = ?', $customerId)
-                ->where('product_id = ?', $productId)
-                ->where('website_id = ?', $websiteId);
-        }
-
-        $union = $connection->select()->union($selects, Select::SQL_UNION_ALL);
-        foreach ($connection->fetchCol($union) as $type) {
+        foreach ($this->alertResource->getSubscribedTypes($customerId, $productId, $websiteId) as $type) {
             $status[$type] = true;
         }
 
@@ -272,36 +256,6 @@ class ProductAlertManager
     }
 
     /**
-     * Resolve a SKU to a product id with one indexed query.
-     *
-     * When a website id is given, the product must also be assigned to it.
-     *
-     * @param string $sku
-     * @param int|null $websiteId
-     * @return int|null
-     */
-    private function getProductId(string $sku, ?int $websiteId = null): ?int
-    {
-        $connection = $this->resourceConnection->getConnection();
-        $select = $connection->select()
-            ->from(['e' => $this->resourceConnection->getTableName('catalog_product_entity')], 'entity_id')
-            ->where('e.sku = ?', $sku)
-            ->limit(1);
-
-        if ($websiteId !== null) {
-            $select->join(
-                ['pw' => $this->resourceConnection->getTableName('catalog_product_website')],
-                'pw.product_id = e.entity_id',
-                []
-            )->where('pw.website_id = ?', $websiteId);
-        }
-
-        $productId = $connection->fetchOne($select);
-
-        return $productId === false ? null : (int) $productId;
-    }
-
-    /**
      * Current final price of a product in the store.
      *
      * @param int $productId
@@ -316,17 +270,6 @@ class ProductAlertManager
         } catch (NoSuchEntityException $e) {
             throw $this->productNotFound($e);
         }
-    }
-
-    /**
-     * Alert table for the given alert type.
-     *
-     * @param string $alertType
-     * @return string
-     */
-    private function getTable(string $alertType): string
-    {
-        return $alertType === self::ALERT_TYPE_PRICE ? self::TABLE_PRICE : self::TABLE_STOCK;
     }
 
     /**
