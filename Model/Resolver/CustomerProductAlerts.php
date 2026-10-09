@@ -7,7 +7,6 @@ declare(strict_types=1);
 namespace Magenx\ProductAlertGraphQl\Model\Resolver;
 
 use Magento\Framework\GraphQl\Config\Element\Field;
-use Magento\Framework\GraphQl\Exception\GraphQlAuthorizationException;
 use Magento\Framework\GraphQl\Query\ResolverInterface;
 use Magento\Framework\GraphQl\Schema\Type\ResolveInfo;
 use Magenx\ProductAlertGraphQl\Model\ProductAlertManager;
@@ -23,9 +22,11 @@ class CustomerProductAlerts implements ResolverInterface
 {
     /**
      * @param ProductAlertManager $manager
+     * @param RequestReader $requestReader
      */
     public function __construct(
-        private readonly ProductAlertManager $manager
+        private readonly ProductAlertManager $manager,
+        private readonly RequestReader $requestReader
     ) {
     }
 
@@ -34,13 +35,7 @@ class CustomerProductAlerts implements ResolverInterface
      */
     public function resolve(Field $field, $context, ResolveInfo $info, ?array $value = null, ?array $args = null)
     {
-        if (false === $context->getExtensionAttributes()->getIsCustomer()) {
-            throw new GraphQlAuthorizationException(
-                __('The current customer isn\'t authorized.')
-            );
-        }
-
-        $customerId = (int) $context->getUserId();
+        $customerId = $this->requestReader->getCustomerId($context);
         $store = $context->getExtensionAttributes()->getStore();
         $websiteId = (int) $store->getWebsiteId();
 
